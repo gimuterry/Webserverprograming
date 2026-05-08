@@ -1,0 +1,81 @@
+<div class="auth-wrapper">
+    <div class="auth-tabs">
+        <button id="tab-login" onclick="switchTab('login')">로그인</button>
+        <button id="tab-register" onclick="switchTab('register')">회원가입</button>
+        <button onclick="loginAsGuest()" class="guest-btn">게스트 모드</button>
+    </div>
+
+    <form id="form-login" onsubmit="handleAuth(event, 'login')">
+        <input type="text" name="username" placeholder="아이디" required>
+        <input type="password" name="password" placeholder="비밀번호" required>
+        <button type="submit">접속</button>
+    </form>
+
+    <form id="form-register" onsubmit="handleAuth(event, 'register')" style="display:none;">
+        <input type="text" name="username" placeholder="사용할 아이디" required>
+        <input type="password" name="password" placeholder="비밀번호" required>
+        <input type="password" name="confirm" placeholder="비밀번호 확인" required>
+        <button type="submit">가입 완료</button>
+    </form>
+</div>
+
+<script>
+    // 탭 전환 (로그인 <=> 회원가입)
+    function switchTab(mode) {
+        if (mode === 'login') {
+            document.getElementById('form-login').style.display = 'block';
+            document.getElementById('form-register').style.display = 'none';
+        } else {
+            document.getElementById('form-login').style.display = 'none';
+            document.getElementById('form-register').style.display = 'block';
+        }
+    }
+
+    // 로그인/회원가입 처리
+    async function handleAuth(event, mode) {
+        event.preventDefault(); // 페이지 새로고침 방지
+        
+        const form = event.target;
+        const username = form.username.value;
+        const password = form.password.value;
+
+        // 회원가입 시 비밀번호 확인 체크 (선택 사항)
+        if (mode === 'register') {
+            const confirm = form.confirm.value;
+            if (password !== confirm) return alert('비밀번호가 일치하지 않습니다.');
+        }
+
+        try {
+            const response = await fetch(`/auth/${mode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (mode === 'register') {
+                    alert('회원가입 완료! 로그인 해주세요.');
+                    switchTab('login');
+                } else {
+                    // 로그인 성공 시 메인 로비로 이동
+                    window.location.href = '/';
+                }
+            } else {
+                alert(data.message || '오류가 발생했습니다.');
+            }
+        } catch (err) {
+            console.error('인증 에러:', err);
+        }
+    }
+
+    // 게스트 모드 (기존 팀장님 코드 활용)
+    async function loginAsGuest() {
+        const response = await fetch('/auth/guest', { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+            window.location.href = '/';
+        }
+    }
+</script>

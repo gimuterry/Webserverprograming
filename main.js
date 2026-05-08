@@ -3,40 +3,47 @@ const app = express();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
 const path = require('path');
+const session = require('express-session'); // [추가] 세션 패키지
 
-// 뷰 엔진 설정 (EJS)
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// 정적 파일 경로 설정 (CSS, JS)
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 기본 경로 라우팅
+// [추가] 세션 설정: 로그인 상태를 유지하는 '틀'입니다.
+app.use(session({
+    secret: '3jo-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 1000 * 60 * 60 * 24 } // 24시간 유지
+}));
+
+// [수정] 기본 경로 라우팅: 로그인 여부에 따라 '대문' 혹은 '로비'를 보여줌
 app.get('/', (req, res) => {
-    res.render('index'); // views/index.ejs를 보여줌
+    if (req.session.user) {
+        res.render('index', { user: req.session.user }); // 로그인 했으면 메인(index)
+    } else {
+        res.render('login'); // 안 했으면 로그인 페이지(login)
+    }
 });
 
-// 기존 코드 아래에 추가
+// 라우터 연결
 const authRouter = require('./routes/auth');
-
-
-app.use('/auth', authRouter); // '/auth' 경로로 들어오는 요청 처리
-
-// 기존 authRouter 아래에 추가
 const channelRouter = require('./routes/channel');
+app.use('/auth', authRouter);
 app.use('/channel', channelRouter);
 
-const voiceRoom = require('./socket/voiceRoom'); 
+// main.js 기존 라우터 아래에 추가
+const friendRouter = require('./routes/friend');
+app.use('/friend', friendRouter); // '/friend' 경로로 오는 요청 처리
 
-// 소켓 엔진 실행 (이게 중요!)
+// 소켓 연결
+const voiceRoom = require('./socket/voiceRoom'); 
 voiceRoom(io);
 
-// 서버 가동
 const PORT = 3000;
 server.listen(PORT, () => {
     console.log(`🚀 3조 서버 가동 시작: http://localhost:${PORT}`);
 });
-
-
