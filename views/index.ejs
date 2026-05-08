@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>노공삼 3조 - 실시간 음성채팅</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        button { cursor: pointer; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+        #app-section { margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px; }
+        .channel-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        #chat-window { height: 200px; overflow-y: auto; background: #f9f9f9; padding: 10px; margin-bottom: 10px; border: 1px solid #eee; color: black; text-align: left; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 3조 실시간 음성채팅</h1>
+        <p id="status">상태: 연결 대기 중...</p>
+        <h2 id="current-room-display" style="color: #007bff; display: none;">🏠 현재 채널: <span id="room-id-text"></span></h2>
+        <div id="login-section">
+            <p>서비스 이용을 위해 로그인이 필요합니다.</p>
+            <button onclick="loginAsGuest()">게스트로 시작하기</button>
+        </div>
+
+        <div id="app-section" style="display:none;">
+            <h3>📁 채널 생성</h3>
+            <input type="text" id="newChannelName" placeholder="채널 이름 입력" style="padding: 10px; width: 70%;">
+            <button onclick="createNewChannel()">생성</button>
+
+            <h3>🎧 채널 목록</h3>
+            <div id="channel-list"></div>
+
+            <div id="chat-section" style="display:none; margin-top: 20px; border: 1px solid #ddd; padding: 10px; border-radius: 8px;">
+                <h4>💬 실시간 채팅</h4>
+                <div id="chat-window"></div>
+                <input type="text" id="chatInput" placeholder="메시지를 입력하세요..." style="width: 70%; padding: 10px;">
+                <button onclick="sendMessage()">전송</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = null;
+        let currentRoomId = null;
+        let currentStream = null; // 마이크 스트림 저장용
+        let myUsername = "";
+        let currentCall = null;
+    
+
+        const socket = io();
+        const myPeer = new Peer(); 
+
+        async function loginAsGuest() {
+            try {
+                const response = await fetch('/auth/guest', { method: 'POST' });
+                const data = await response.json();
+                myUsername = data.username;
+                if (data.username) {
+                    currentUserId = data.id;
+                    document.getElementById('status').innerText = `상태: ${data.username}님 환영합니다!`;
+                    document.getElementById('login-section').style.display = 'none';
+                    document.getElementById('app-section').style.display = 'block';
+                    loadChannels();
+                }
+            } catch (err) {
+                alert('로그인 서버 오류!');
+            }
+        }
+
+        async function createNewChannel() {
+            const name = document.getElementById('newChannelName').value;
+            if(!name) return alert('채널 이름을 입력하세요.');
+            const response = await fetch('/channel/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channelName: name, ownerId: currentUserId })
+            });
+            if(response.ok) {
+                document.getElementById('newChannelName').value = '';
+                loadChannels();
+            }
+        }
+
+        async function loadChannels() {
+            const response = await fetch('/channel/list');
+            const channels = await response.json();
+            const listDiv = document.getElementById('channel-list');
+            listDiv.innerHTML = channels.length > 0 
+                ? channels.map(ch => `
+                    <div class="channel-card">
+                        <span><strong>${ch.channel_name}</strong></span>
+                        <button onclick="joinChannel('${ch.id}')">입장</button>
+                    </div>
+                `).join('')
+                : '<p>생성된 채널이 없습니다.</p>';
+        }
+
+        myPeer.on('open', id => console.log('✅ Peer 클라우드 연결 성공! ID:', id));
+        myPeer.on('error', err => console.error('❌ Peer 에러:', err.type));
+
+        
+
+function joinChannel(roomId) {
+    // 1. [핵심] 기존 방에서 완전히 나가기 (방 이동 시 필수)
+    if (currentRoomId) {
+        console.log(`🏃 ${currentRoomId}번 방을 나갑니다.`);
+        socket.emit('leave-room', currentRoomId, myPeer.id);
+        
+        // 기존 오디오들 제거
+        document.querySelectorAll('audio').forEach(el => el.remove());
+    }
+
+    // 2. UI 업데이트
+    currentRoomId = roomId;
+    document.getElementById('current-room-display').style.display = 'block';
+    document.getElementById('room-id-text').innerText = roomId;
+    document.getElementById('chat-section').style.display = 'block';
+    document.getElementById('chat-window').innerHTML = ''; // 채팅창 초기화
+
+    // 3. 음성 연결 시작
+    navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+        currentStream = stream;
+        console.log('🎤 마이크 준비 완료');
+
+        // Peer 수신 설정 (한 번만 등록되도록 off 사용)
+        myPeer.off('call').on('call', call => {
+            console.log('📞 같은 방 유저로부터 전화를 수신합니다.');
+            call.answer(stream);
+            const audio = document.createElement('audio');
+            call.on('stream', userStream => addAudioStream(audio, userStream));
+        });
+
+        sendJoinSignal(roomId, myPeer.id, stream);
+    });
+}
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value;
+            if(!message || !currentRoomId) return;
+            socket.emit('send-message', currentRoomId, { sender: myUsername, message: message });
+            input.value = '';
+        }
+
+        socket.on('receive-message', data => {
+            const chatWindow = document.getElementById('chat-window');
+            const msgDiv = document.createElement('div');
+            msgDiv.innerHTML = `<strong>${data.sender}:</strong> ${data.message}`;
+            chatWindow.appendChild(msgDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        });
+
+        document.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMessage(); });
+
+        function sendJoinSignal(roomId, userId, stream) {
+    socket.emit('join-room', roomId, userId);
+
+    socket.off('user-connected').on('user-connected', connectedUserId => {
+        console.log('🔔 전화를 겁니다:', connectedUserId);
+        
+        // 전화를 걸 때도 변수에 저장
+        const call = myPeer.call(connectedUserId, stream);
+        currentCall = call; 
+
+        const audio = document.createElement('audio');
+        call.on('stream', userStream => {
+            addAudioStream(audio, userStream);
+        });
+    });
+}
+
+        function addAudioStream(audio, stream) {
+            audio.srcObject = stream;
+            audio.autoplay = true;
+            audio.addEventListener('loadedmetadata', () => audio.play());
+            document.body.append(audio); 
+        }
+
+        function addAudioStream(audio, stream) {
+    // 기존에 생성된 오디오가 있다면 지우고 새로 생성 (선택 사항)
+    const oldAudio = document.querySelector('audio');
+    if(oldAudio) oldAudio.remove();
+
+    audio.srcObject = stream;
+    audio.autoplay = true;
+    audio.addEventListener('loadedmetadata', () => audio.play());
+    document.body.append(audio); 
+}
+    </script>
+</body>
+</html>
