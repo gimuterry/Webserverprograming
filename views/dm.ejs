@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>DM</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #f6f7ff, #ffffff);
+            color: #20243f;
+        }
+
+        .dm-container {
+            width: 520px;
+            height: 700px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 18px 50px rgba(120, 110, 255, 0.18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .dm-header {
+            padding: 22px;
+            background: #f0efff;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .status {
+            font-size: 13px;
+            color: #777;
+            margin-top: 5px;
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fafbff;
+        }
+
+        .msg {
+            margin-bottom: 12px;
+            max-width: 70%;
+            padding: 12px 15px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .mine {
+            margin-left: auto;
+            background: #6c5cff;
+            color: white;
+        }
+
+        .other {
+            margin-right: auto;
+            background: #eef0ff;
+            color: #20243f;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+            padding: 18px;
+            border-top: 1px solid #eee;
+        }
+
+        input {
+            flex: 1;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid #ddd;
+            outline: none;
+        }
+
+        button {
+            padding: 14px 18px;
+            border-radius: 16px;
+            border: none;
+            background: #6c5cff;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .back {
+            display: block;
+            text-align: center;
+            padding: 14px;
+            color: #635bff;
+            text-decoration: none;
+            font-weight: bold;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dm-container">
+        <div class="dm-header">
+            <%= friend.username %>님과의 메시지
+
+            <div class="status">
+                <%= friend.is_online ? "온라인" : "오프라인" %>
+            </div>
+        </div>
+
+        <div id="messages" class="messages"></div>
+
+        <div class="input-area">
+            <input
+                type="text"
+                id="messageInput"
+                placeholder="메시지를 입력하세요"
+                onkeydown="if(event.key === 'Enter') sendMessage()"
+            >
+
+            <button onclick="sendMessage()">전송</button>
+        </div>
+
+        <a href="/friend/profile/<%= friend.id %>" class="back">프로필로 돌아가기</a>
+    </div>
+
+    <script>
+        const friendId = "<%= friend.id %>";
+        const myId = "<%= me.id %>";
+
+        async function loadMessages() {
+            const response = await fetch(`/dm/${friendId}/messages`);
+            const messages = await response.json();
+
+            const box = document.getElementById('messages');
+
+            box.innerHTML = messages.map(msg => {
+                const isMine = String(msg.sender_id) === String(myId);
+
+                return `
+                    <div class="msg ${isMine ? 'mine' : 'other'}">
+                        ${msg.message}
+                    </div>
+                `;
+            }).join('');
+
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (message === '') {
+                return;
+            }
+
+            await fetch(`/dm/${friendId}/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: message
+                })
+            });
+
+            input.value = '';
+            loadMessages();
+        }
+
+        loadMessages();
+
+        setInterval(loadMessages, 2000);
+    </script>
+
+</body>
+</html>

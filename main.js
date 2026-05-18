@@ -32,8 +32,10 @@ app.get('/', (req, res) => {
 // 라우터 연결
 const authRouter = require('./routes/auth');
 const channelRouter = require('./routes/channel');
+const dmRouter = require('./routes/dm');
 app.use('/auth', authRouter);
 app.use('/channel', channelRouter);
+app.use('/dm', dmRouter);
 
 // main.js 기존 라우터 아래에 추가
 const friendRouter = require('./routes/friend');

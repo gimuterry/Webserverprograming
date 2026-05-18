@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>친구 개인 페이지</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #f6f7ff, #ffffff);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #20243f;
+        }
+
+        .profile-card {
+            width: 430px;
+            padding: 38px 34px;
+            border-radius: 30px;
+            background: #ffffff;
+            box-shadow: 0 18px 50px rgba(120, 110, 255, 0.18);
+            border: 1px solid #eceeff;
+            text-align: center;
+        }
+
+        .avatar {
+            width: 118px;
+            height: 118px;
+            margin: 0 auto 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #b8a9ff, #f0ecff);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 52px;
+        }
+
+        .nickname {
+            margin: 8px 0 8px;
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .status-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 18px;
+            font-size: 15px;
+            color: #7d83a0;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .online {
+            background-color: #20c477;
+        }
+
+        .offline {
+            background-color: #aaa;
+        }
+
+        .message-box {
+            margin: 18px 0 26px;
+            padding: 16px 18px;
+            border-radius: 20px;
+            background: #f7f7ff;
+            color: #5f6685;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 17px;
+            border: none;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .message-btn {
+            background: linear-gradient(135deg, #6c5cff, #8b7cff);
+            color: white;
+        }
+
+        .delete-btn {
+            background: linear-gradient(135deg, #ff6b8a, #ff4d6d);
+            color: white;
+        }
+
+        .back-btn {
+            margin-top: 14px;
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border-radius: 17px;
+            background: #f0efff;
+            color: #635bff;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .notice {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #ff4d6d;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="profile-card">
+        <div class="avatar">🐵</div>
+
+        <!-- 닉네임 -->
+        <div class="nickname"><%= friend.username %></div>
+
+        <!-- 온라인 / 오프라인 -->
+        <div class="status-row">
+            <span class="status-dot <%= friend.is_online ? 'online' : 'offline' %>"></span>
+            <span><%= friend.is_online ? "온라인" : "오프라인" %></span>
+        </div>
+
+        <!-- 상태메시지 -->
+        <div class="message-box">
+            <%= friend.status_message %>
+        </div>
+
+        <!-- 버튼 -->
+        <div class="button-group">
+            <button class="btn message-btn" onclick="sendMessage()">메시지 보내기</button>
+            <button class="btn delete-btn" onclick="removeFriend()">친구 삭제</button>
+        </div>
+
+        <a href="/" class="back-btn">메인으로 돌아가기</a>
+
+        <p id="notice" class="notice"></p>
+    </div>
+
+    <script>
+        const friendId = "<%= friend.id %>";
+        const friendName = "<%= friend.username %>";
+
+        function sendMessage() {
+            location.href = '/dm/' + friendId;
+        }
+
+        async function removeFriend() {
+            const result = confirm('정말 이 친구를 삭제하시겠습니까?');
+
+            if (!result) {
+                return;
+            }
+
+            const response = await fetch('/friend/remove', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    friendId: friendId
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('친구가 삭제되었습니다.');
+                location.href = '/';
+            } else {
+                document.getElementById('notice').innerText = '친구 삭제에 실패했습니다.';
+            }
+        }
+    </script>
+
+</body>
+</html>
